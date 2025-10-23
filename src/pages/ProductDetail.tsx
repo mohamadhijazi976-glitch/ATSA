@@ -1,10 +1,61 @@
 import { useParams, Link } from 'react-router-dom';
-import { products } from '../data/products';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { ArrowLeft } from 'lucide-react';
+import type { Database } from '../lib/database.types';
+
+type Product = Database['public']['Tables']['products']['Row'];
 
 export function ProductDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const product = products.find(p => p.slug === slug);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProduct();
+    loadRelatedProducts();
+  }, [slug]);
+
+  const loadProduct = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error loading product:', error);
+    } else {
+      setProduct(data);
+    }
+    setLoading(false);
+  };
+
+  const loadRelatedProducts = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('is_active', true)
+      .neq('slug', slug)
+      .order('order_index')
+      .limit(4);
+
+    if (error) {
+      console.error('Error loading related products:', error);
+    } else {
+      setRelatedProducts(data || []);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center text-gray-600">Loading...</div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -38,7 +89,7 @@ export function ProductDetail() {
           <div className="relative">
             <div className="sticky top-32">
               <img
-                src={product.imageUrl}
+                src={product.image_url}
                 alt={product.title}
                 className="w-full h-auto rounded-2xl shadow-2xl"
               />
@@ -107,29 +158,26 @@ export function ProductDetail() {
             Other Products
           </h2>
           <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products
-              .filter(p => p.id !== product.id)
-              .slice(0, 4)
-              .map(relatedProduct => (
-                <Link
-                  key={relatedProduct.id}
-                  to={`/product/${relatedProduct.slug}`}
-                  className="group"
-                >
-                  <div className="bg-white rounded-lg overflow-hidden shadow-lg hover:shadow-2xl transition">
-                    <img
-                      src={relatedProduct.imageUrl}
-                      alt={relatedProduct.title}
-                      className="w-full h-48 object-cover"
-                    />
-                    <div className="p-4">
-                      <h3 className="font-bold text-[#3d4f5c] group-hover:text-[#2d3f4c] transition">
-                        {relatedProduct.title}
-                      </h3>
-                    </div>
+            {relatedProducts.map(relatedProduct => (
+              <Link
+                key={relatedProduct.id}
+                to={`/product/${relatedProduct.slug}`}
+                className="group"
+              >
+                <div className="bg-white rounded-lg overflow-hidden shadow-lg hover:shadow-2xl transition">
+                  <img
+                    src={relatedProduct.image_url}
+                    alt={relatedProduct.title}
+                    className="w-full h-48 object-cover"
+                  />
+                  <div className="p-4">
+                    <h3 className="font-bold text-[#3d4f5c] group-hover:text-[#2d3f4c] transition">
+                      {relatedProduct.title}
+                    </h3>
                   </div>
-                </Link>
-              ))}
+                </div>
+              </Link>
+            ))}
           </div>
         </section>
       </main>
